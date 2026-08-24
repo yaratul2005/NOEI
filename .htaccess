@@ -1,0 +1,32 @@
+# NOEI CMS Apache / LiteSpeed Rewrite & Security Configuration
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Disable Directory Index Browsing
+    Options -Indexes
+
+    # Block access to sensitive configuration, log, and hidden files
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^storage/logs/ - [F,L]
+    RewriteRule ^storage/backups/ - [F,L]
+    RewriteRule ^\.env - [F,L]
+    RewriteRule ^\.git - [F,L]
+
+    # Serve existing files or directories directly
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Pass all other requests to index.php (Front Controller)
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# Basic Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

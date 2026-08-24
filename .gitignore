@@ -1,0 +1,32 @@
+# Configuration files containing credentials
+/config/database.php
+
+# Storage runtime files & locks
+/storage/installed.lock
+/storage/cache/*
+!/storage/cache/.gitkeep
+/storage/logs/*.log
+!/storage/logs/.gitkeep
+/storage/backups/*
+!/storage/backups/.gitkeep
+/storage/uploads/*
+!/storage/uploads/.htaccess
+!/storage/uploads/.gitkeep
+
+# Distribution builds
+/dist/
+
+# Development & Testing artifacts
+/tests/temp_*
+.phpunit.result.cache
+
+# IDE & OS specific files
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~

@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /config/
+Disallow: /core/
+Disallow: /install/
+Disallow: /storage/logs/
+Disallow: /storage/backups/
+Disallow: /api/
+
+Sitemap: /sitemap.xml

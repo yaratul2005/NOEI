@@ -1,0 +1,8 @@
+{
+    "name": "NOEI Default Theme",
+    "slug": "default",
+    "version": "1.0.0",
+    "author": "NOEI Core Team",
+    "description": "Clean, fast, responsive, zero-build default theme for NOEI CMS.",
+    "locations": ["primary", "footer"]
+}

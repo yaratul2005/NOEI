@@ -1,0 +1,74 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php-version }} Test Suite
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.2', '8.3']
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_DATABASE: noei_cms_test
+          MYSQL_USER: noei_user
+          MYSQL_PASSWORD: noei_password
+        ports:
+          - 3306:3306
+        options: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP Environment
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: pdo, pdo_mysql, pdo_sqlite, mbstring, gd, curl, json, zip
+          coverage: none
+
+      - name: Check PHP Syntax (Linting)
+        run: |
+          find app config core install modules routes -name "*.php" -exec php -l {} \;
+
+      - name: Run Core Test Suite (Milestone 1)
+        run: php tests/test_core.php
+
+      - name: Run Database & Installer Test Suite (Milestone 2)
+        run: php tests/test_milestone2.php
+
+      - name: Run Admin & RBAC Test Suite (Milestone 3)
+        run: php tests/test_milestone3.php
+
+      - name: Run Content Engine Test Suite (Milestone 4)
+        run: php tests/test_milestone4.php
+
+      - name: Run Media Pipeline Test Suite (Milestone 5)
+        run: php tests/test_milestone5.php
+
+      - name: Run Theme & Frontend Test Suite (Milestone 6)
+        run: php tests/test_milestone6.php
+
+      - name: Run SEO & Settings Test Suite (Milestone 7)
+        run: php tests/test_milestone7.php
+
+      - name: Run Module Architecture Test Suite (Milestone 8)
+        run: php tests/test_milestone8.php
+
+      - name: Run Backup & Rollback Test Suite (Milestone 9)
+        run: php tests/test_milestone9.php
+
+      - name: Run Core REST API Test Suite (Milestone 10)
+        run: php tests/test_milestone10.php

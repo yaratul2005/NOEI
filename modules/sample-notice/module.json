@@ -1,0 +1,12 @@
+{
+    "name": "Sample Notice & Reading Time",
+    "slug": "sample-notice",
+    "version": "1.0.0",
+    "description": "Demonstration extension module that prepends an estimated reading time and styled callout to single posts.",
+    "author": "NOEI Core Team",
+    "author_uri": "https://noei.io",
+    "permissions": ["content:filter", "admin:menu"],
+    "main": "SampleNoticeModule.php",
+    "min_php_version": "8.1.0",
+    "min_cms_version": "1.0.0"
+}
