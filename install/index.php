@@ -40,6 +40,15 @@ $success = '';
 // Step 1: Pre-Flight Check Evaluator
 function checkPreflight(): array
 {
+    // Auto-heal missing storage folders
+    $storageSubdirs = ['/config', '/storage', '/storage/uploads', '/storage/cache', '/storage/logs', '/storage/backups'];
+    foreach ($storageSubdirs as $dir) {
+        $fullPath = NOEI_ROOT_DIR . $dir;
+        if (!is_dir($fullPath)) {
+            @mkdir($fullPath, 0755, true);
+        }
+    }
+
     $results = [];
 
     // PHP Version

@@ -5,5 +5,10 @@
     </footer>
 
     <?php \Core\Event::doAction('theme_footer'); ?>
+
+    <?php $customFooter = option('custom_footer_scripts'); ?>
+    <?php if (!empty($customFooter)): ?>
+        <?= $customFooter ?>
+    <?php endif; ?>
 </body>
 </html>

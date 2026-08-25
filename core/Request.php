@@ -78,6 +78,85 @@ class Request
     }
 
     /**
+     * Determine if connection is secured via HTTPS, reverse proxies, or Cloudflare.
+     *
+     * @return bool
+     */
+    public function isHttps(): bool
+    {
+        if (!empty($this->server['HTTPS']) && strtolower((string)$this->server['HTTPS']) !== 'off') {
+            return true;
+        }
+
+        if (strtolower((string)($this->server['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https') {
+            return true;
+        }
+
+        if (strtolower((string)($this->server['HTTP_X_FORWARDED_SSL'] ?? '')) === 'on') {
+            return true;
+        }
+
+        if ((string)($this->server['SERVER_PORT'] ?? '') === '443') {
+            return true;
+        }
+
+        if (isset($this->server['HTTP_CF_VISITOR'])) {
+            $cfVisitor = json_decode((string)$this->server['HTTP_CF_VISITOR'], true);
+            if (is_array($cfVisitor) && ($cfVisitor['scheme'] ?? '') === 'https') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get the URL scheme (http or https).
+     *
+     * @return string
+     */
+    public function getScheme(): string
+    {
+        return $this->isHttps() ? 'https' : 'http';
+    }
+
+    /**
+     * Get the HTTP Hostname.
+     *
+     * @return string
+     */
+    public function getHost(): string
+    {
+        return $this->server['HTTP_HOST'] ?? ($this->server['SERVER_NAME'] ?? 'localhost');
+    }
+
+    /**
+     * Get the dynamic installation base path (e.g. '' for root or '/cms' for subfolder).
+     *
+     * @return string
+     */
+    public function getBasePath(): string
+    {
+        $scriptName = $this->server['SCRIPT_NAME'] ?? '';
+        if (empty($scriptName)) {
+            return '';
+        }
+
+        $dir = str_replace('\\', '/', dirname($scriptName));
+        return ($dir === '/' || $dir === '.') ? '' : '/' . trim($dir, '/');
+    }
+
+    /**
+     * Get the full base URL including scheme, host, and subfolder base path.
+     *
+     * @return string
+     */
+    public function getBaseUrl(): string
+    {
+        return $this->getScheme() . '://' . $this->getHost() . $this->getBasePath();
+    }
+
+    /**
      * Get full request URI.
      *
      * @return string
@@ -88,7 +167,7 @@ class Request
     }
 
     /**
-     * Get clean request URI path (without query string).
+     * Get clean request URI path (without query string and relative to dynamic base path).
      *
      * @return string
      */
@@ -96,7 +175,13 @@ class Request
     {
         $uri = $this->getUri();
         $path = parse_url($uri, PHP_URL_PATH) ?? '/';
-        return '/' . trim($path, '/');
+
+        $basePath = $this->getBasePath();
+        if (!empty($basePath) && str_starts_with($path, $basePath)) {
+            $path = substr($path, strlen($basePath));
+        }
+
+        return '/' . trim((string)$path, '/');
     }
 
     /**

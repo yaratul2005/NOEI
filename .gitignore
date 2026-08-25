@@ -19,6 +19,7 @@
 # Development & Testing artifacts
 /tests/temp_*
 .phpunit.result.cache
+NOEI/
 
 # IDE & OS specific files
 .idea/

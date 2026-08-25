@@ -14,10 +14,16 @@ require_once NOEI_ROOT_DIR . '/core/Autoloader.php';
 \Core\Autoloader::register();
 
 use App\Services\ModuleService;
+use Core\Event;
 use Core\Request;
 use Core\Response;
 use Core\Router;
+use Core\Shortcode;
+use Core\Storage;
 use Core\View;
+
+// Ensure storage directories and security permissions exist
+Storage::ensureDirectories(NOEI_ROOT_DIR);
 
 $request = new Request();
 $response = new Response();
@@ -26,16 +32,24 @@ $router = new Router();
 // Configure View Engine root directory
 View::setViewsPath(NOEI_ROOT_DIR . '/app/Views');
 
-// Database Installation Check
-$dbConfig = require NOEI_ROOT_DIR . '/config/database.php';
-$isInstalled = (bool)($dbConfig['installed'] ?? false);
+// Database Installation & Lock Check
+$isInstalled = false;
+if (file_exists(NOEI_ROOT_DIR . '/storage/installed.lock')) {
+    $isInstalled = true;
+} elseif (file_exists(NOEI_ROOT_DIR . '/config/database.php')) {
+    $dbConfig = require NOEI_ROOT_DIR . '/config/database.php';
+    $isInstalled = (bool)($dbConfig['installed'] ?? false);
+}
 
 if (!$isInstalled && !str_starts_with($request->getPath(), '/install')) {
     if (file_exists(NOEI_ROOT_DIR . '/install/index.php')) {
-        $response->redirect('/install/index.php')->send();
+        $response->redirect(base_url('/install/index.php'))->send();
         exit;
     }
 }
+
+// Hook Shortcode Engine into Content Filter
+Event::addFilter('the_content', [Shortcode::class, 'parse'], 20);
 
 // Boot Active Extension Modules
 if ($isInstalled) {

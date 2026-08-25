@@ -1,4 +1,4 @@
-# .gitlab-ci.yml
+# .gitlab-ci.yml - Automated CI/CD for NOEI CMS on GitLab
 image: php:8.2-cli
 
 services:
@@ -25,7 +25,7 @@ stages:
 lint:php:
   stage: lint
   script:
-    - find . -name "*.php" -not -path "./storage/*" -exec php -l {} \;
+    - find . -name "*.php" -not -path "./storage/*" -not -path "./NOEI/*" -exec php -l {} \;
 
 # Stage 2: Automated Test Execution
 test:unit:
@@ -36,6 +36,16 @@ test:unit:
     - docker-php-ext-install pdo pdo_mysql gd zip
   script:
     - php tests/test_core.php
+    - php tests/test_milestone2.php
+    - php tests/test_milestone3.php
+    - php tests/test_milestone4.php
+    - php tests/test_milestone5.php
+    - php tests/test_milestone6.php
+    - php tests/test_milestone7.php
+    - php tests/test_milestone8.php
+    - php tests/test_milestone9.php
+    - php tests/test_milestone10.php
+    - php tests/test_platform_upgrade.php
 
 # Stage 3: Package Release ZIP on Tags
 package:release:
@@ -50,5 +60,5 @@ package:release:
   artifacts:
     name: "noei-cms-$CI_COMMIT_TAG"
     paths:
-      - storage/backups/*.zip
+      - dist/*.zip
     expire_in: 30 days

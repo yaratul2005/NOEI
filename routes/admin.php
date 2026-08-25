@@ -8,7 +8,9 @@ declare(strict_types=1);
 
 use App\Controllers\Admin\AuthController;
 use App\Controllers\Admin\BackupController;
+use App\Controllers\Admin\CustomizerController;
 use App\Controllers\Admin\DashboardController;
+use App\Controllers\Admin\HealthController;
 use App\Controllers\Admin\MediaController;
 use App\Controllers\Admin\MenuController;
 use App\Controllers\Admin\ModuleController;
@@ -84,6 +86,10 @@ $router->group('/admin', function (Router $r) {
     $r->get('/menus', [MenuController::class, 'index']);
     $r->post('/menus', [MenuController::class, 'store']);
 
+    // Visual Theme Customizer Routes
+    $r->get('/customizer', [CustomizerController::class, 'index']);
+    $r->post('/customizer', [CustomizerController::class, 'save']);
+
     // Extension Modules Routes
     $r->get('/modules', [ModuleController::class, 'index']);
     $r->post('/modules/upload', [ModuleController::class, 'upload']);
@@ -118,6 +124,9 @@ $router->group('/admin', function (Router $r) {
     $r->post('/updates/check', [UpdateController::class, 'check']);
     $r->post('/updates/apply', [UpdateController::class, 'apply']);
     $r->post('/updates/rollback', [UpdateController::class, 'rollback']);
+
+    // Site Health & Diagnostics Routes
+    $r->get('/health', [HealthController::class, 'index']);
 }, [
     AuthMiddleware::class,
     CsrfMiddleware::class,

@@ -15,7 +15,7 @@ require __DIR__ . '/header.php';
 </article>
 
 <div style="margin-top: 20px;">
-    <a href="/" class="btn" style="background-color: var(--muted-color);">&larr; Back to Homepage</a>
+    <a href="<?= base_url('/') ?>" class="btn" style="background-color: var(--muted-color);">&larr; Back to Homepage</a>
 </div>
 
 <?php require __DIR__ . '/footer.php'; ?>
