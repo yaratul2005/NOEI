@@ -8,7 +8,7 @@ use Core\Database;
 
 /**
  * Post & Page Data Model for NOEI CMS.
- * Handles database operations for posts, pages, and post metadata.
+ * Handles database operations for posts, pages, batch eager loading, and post metadata.
  */
 class Post
 {
@@ -46,6 +46,149 @@ class Post
         $sql .= " ORDER BY p.id DESC LIMIT {$limit} OFFSET {$offset}";
 
         return $this->db->fetchAll($sql, $params);
+    }
+
+    /**
+     * Get published posts with automatic eager loading of meta and taxonomies.
+     *
+     * @param string $type
+     * @param int $limit
+     * @param int $offset
+     * @param bool $eagerLoad
+     * @return array
+     */
+    public function getPublished(string $type = 'post', int $limit = 10, int $offset = 0, bool $eagerLoad = true): array
+    {
+        $posts = $this->getAll($type, 'published', $limit, $offset);
+
+        if ($eagerLoad && !empty($posts)) {
+            self::eagerLoadAll($posts);
+        }
+
+        return $posts;
+    }
+
+    /**
+     * Batch eager-load all metadata for a collection of posts in a single query (solves N+1).
+     *
+     * @param array<int, array<string, mixed>> $posts
+     */
+    public static function eagerLoadMeta(array &$posts): void
+    {
+        global $_cms_post_meta_cache;
+        if (empty($posts)) {
+            return;
+        }
+
+        $ids = [];
+        foreach ($posts as $p) {
+            if (isset($p['id']) && is_numeric($p['id'])) {
+                $ids[] = (int)$p['id'];
+            }
+        }
+
+        if (empty($ids)) {
+            return;
+        }
+
+        $ids = array_unique($ids);
+        $db = Database::getInstance();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        $sql = "SELECT post_id, meta_key, meta_value FROM cms_post_meta WHERE post_id IN ({$placeholders})";
+        $rows = $db->fetchAll($sql, array_values($ids));
+
+        $metaMap = [];
+        foreach ($ids as $id) {
+            $metaMap[$id] = [];
+        }
+
+        foreach ($rows as $row) {
+            $pid = (int)$row['post_id'];
+            $k = (string)$row['meta_key'];
+            $raw = (string)$row['meta_value'];
+
+            $decoded = json_decode($raw, true);
+            $val = (json_last_error() === JSON_ERROR_NONE && (is_array($decoded) || is_object($decoded))) ? $decoded : $raw;
+
+            $metaMap[$pid][$k] = $val;
+            $_cms_post_meta_cache[$pid][$k] = $val;
+        }
+
+        foreach ($posts as &$post) {
+            $pid = (int)($post['id'] ?? 0);
+            $post['meta'] = $metaMap[$pid] ?? [];
+        }
+        unset($post);
+    }
+
+    /**
+     * Batch eager-load all taxonomy terms (categories & tags) for a collection of posts in a single query.
+     *
+     * @param array<int, array<string, mixed>> $posts
+     */
+    public static function eagerLoadTaxonomies(array &$posts): void
+    {
+        if (empty($posts)) {
+            return;
+        }
+
+        $ids = [];
+        foreach ($posts as $p) {
+            if (isset($p['id']) && is_numeric($p['id'])) {
+                $ids[] = (int)$p['id'];
+            }
+        }
+
+        if (empty($ids)) {
+            return;
+        }
+
+        $ids = array_unique($ids);
+        $db = Database::getInstance();
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        $sql = "SELECT tr.object_id, t.id as term_id, t.name, t.slug, tx.taxonomy 
+                FROM cms_term_relationships tr 
+                JOIN cms_taxonomies tx ON tr.taxonomy_id = tx.id 
+                JOIN cms_terms t ON tx.term_id = t.id 
+                WHERE tr.object_id IN ({$placeholders})";
+
+        $rows = $db->fetchAll($sql, array_values($ids));
+
+        $catMap = [];
+        $tagMap = [];
+        foreach ($ids as $id) {
+            $catMap[$id] = [];
+            $tagMap[$id] = [];
+        }
+
+        foreach ($rows as $row) {
+            $pid = (int)$row['object_id'];
+            if ($row['taxonomy'] === 'category') {
+                $catMap[$pid][] = $row;
+            } elseif ($row['taxonomy'] === 'tag') {
+                $tagMap[$pid][] = $row;
+            }
+        }
+
+        foreach ($posts as &$post) {
+            $pid = (int)($post['id'] ?? 0);
+            $post['categories'] = $catMap[$pid] ?? [];
+            $post['tags'] = $tagMap[$pid] ?? [];
+        }
+        unset($post);
+    }
+
+    /**
+     * Batch eager-load both metadata and taxonomy terms simultaneously.
+     *
+     * @param array<int, array<string, mixed>> $posts
+     */
+    public static function eagerLoadAll(array &$posts): void
+    {
+        self::eagerLoadMeta($posts);
+        self::eagerLoadTaxonomies($posts);
     }
 
     /**

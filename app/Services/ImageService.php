@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Services;
 
 /**
- * Pure-PHP Image Resizing & Responsive Thumbnail Generation Engine for NOEI CMS.
- * Uses GD library with memory-efficient handling suitable for shared hosting.
+ * Pure-PHP Image Resizing & WebP Optimization Engine for NOEI CMS.
+ * Uses GD library with memory-efficient handling and automatic WebP generation suitable for shared hosting.
  */
 class ImageService
 {
@@ -30,11 +30,60 @@ class ImageService
     }
 
     /**
-     * Generate responsive image variants (thumbnail, medium, large).
+     * Check if WebP generation is supported by the current GD environment.
+     *
+     * @return bool
+     */
+    public static function supportsWebp(): bool
+    {
+        return self::isAvailable() && function_exists('imagewebp');
+    }
+
+    /**
+     * Convert an image file to modern WebP format.
+     *
+     * @param string $sourcePath
+     * @param string $destinationPath
+     * @param int $quality (0-100)
+     * @return bool
+     */
+    public function convertToWebp(string $sourcePath, string $destinationPath, int $quality = 80): bool
+    {
+        if (!self::supportsWebp() || !file_exists($sourcePath)) {
+            return false;
+        }
+
+        $imageInfo = @getimagesize($sourcePath);
+        $mime = $imageInfo['mime'] ?? '';
+
+        $srcImage = match ($mime) {
+            'image/jpeg' => @imagecreatefromjpeg($sourcePath),
+            'image/png' => @imagecreatefrompng($sourcePath),
+            'image/gif' => @imagecreatefromgif($sourcePath),
+            'image/webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourcePath) : false,
+            default => false,
+        };
+
+        if (!$srcImage) {
+            return false;
+        }
+
+        // Preserve alpha transparency
+        imagealphablending($srcImage, false);
+        imagesavealpha($srcImage, true);
+
+        $saved = @imagewebp($srcImage, $destinationPath, $quality);
+        imagedestroy($srcImage);
+
+        return (bool)$saved;
+    }
+
+    /**
+     * Generate responsive image variants (thumbnail, medium, large) and modern WebP copies.
      *
      * @param string $sourcePath Full absolute path to source image
      * @param string $mimeType File MIME type
-     * @return array<string, array{path: string, width: int, height: int}>
+     * @return array<string, array{filename: string, path: string, width: int, height: int, webp_path?: string}>
      */
     public function generateVariants(string $sourcePath, string $mimeType): array
     {
@@ -54,6 +103,20 @@ class ImageService
         $extension = strtolower($pathInfo['extension'] ?? 'jpg');
 
         $variants = [];
+
+        // Generate full-size WebP if source is not already WebP
+        if (self::supportsWebp() && $mimeType !== 'image/webp') {
+            $origWebpFilename = "{$filename}.webp";
+            $origWebpPath = "{$dirname}/{$origWebpFilename}";
+            if ($this->convertToWebp($sourcePath, $origWebpPath)) {
+                $variants['original_webp'] = [
+                    'filename' => $origWebpFilename,
+                    'path' => str_replace('\\', '/', $origWebpPath),
+                    'width' => $origWidth,
+                    'height' => $origHeight,
+                ];
+            }
+        }
 
         // If GD is unavailable, create file copy variants as graceful fallback
         if (!self::isAvailable()) {
@@ -81,12 +144,27 @@ class ImageService
 
             if ($this->resizeImage($sourcePath, $variantPath, $mimeType, $origWidth, $origHeight, $targetWidth, $targetHeight, $crop)) {
                 $varInfo = @getimagesize($variantPath);
-                $variants[$sizeName] = [
+                $varW = $varInfo[0] ?? $targetWidth;
+                $varH = $varInfo[1] ?? $targetHeight;
+
+                $varData = [
                     'filename' => $variantFilename,
                     'path' => str_replace('\\', '/', $variantPath),
-                    'width' => $varInfo[0] ?? $targetWidth,
-                    'height' => $varInfo[1] ?? $targetHeight,
+                    'width' => $varW,
+                    'height' => $varH,
                 ];
+
+                // Generate modern WebP variant
+                if (self::supportsWebp() && $mimeType !== 'image/webp') {
+                    $webpFilename = "{$filename}-{$sizeName}.webp";
+                    $webpPath = "{$dirname}/{$webpFilename}";
+                    if ($this->convertToWebp($variantPath, $webpPath)) {
+                        $varData['webp_filename'] = $webpFilename;
+                        $varData['webp_path'] = str_replace('\\', '/', $webpPath);
+                    }
+                }
+
+                $variants[$sizeName] = $varData;
             }
         }
 
@@ -186,6 +264,6 @@ class ImageService
         imagedestroy($srcImage);
         imagedestroy($destImage);
 
-        return $saved;
+        return (bool)$saved;
     }
 }

@@ -9,8 +9,11 @@ declare(strict_types=1);
 use App\Services\OptionService;
 use App\Services\SeoService;
 use Core\Database;
+use Core\I18n;
 use Core\PostType;
 use Core\Shortcode;
+
+$GLOBALS['_cms_post_meta_cache'] = [];
 
 if (!function_exists('e')) {
     /**
@@ -86,6 +89,57 @@ if (!function_exists('asset')) {
     function asset(string $path): string
     {
         return base_url($path);
+    }
+}
+
+if (!function_exists('__')) {
+    /**
+     * Translate string key using the active I18n catalog.
+     *
+     * @param string $key
+     * @param array<string, string|int|float> $replace
+     * @return string
+     */
+    function __(string $key, array $replace = []): string
+    {
+        return I18n::translate($key, $replace);
+    }
+}
+
+if (!function_exists('_e')) {
+    /**
+     * Translate and echo escaped string.
+     *
+     * @param string $key
+     * @param array<string, string|int|float> $replace
+     */
+    function _e(string $key, array $replace = []): void
+    {
+        echo htmlspecialchars(I18n::translate($key, $replace), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+}
+
+if (!function_exists('app_locale')) {
+    /**
+     * Get active application locale (e.g. 'en', 'bn').
+     *
+     * @return string
+     */
+    function app_locale(): string
+    {
+        return I18n::getLocale();
+    }
+}
+
+if (!function_exists('set_locale')) {
+    /**
+     * Set active application locale.
+     *
+     * @param string $locale
+     */
+    function set_locale(string $locale): void
+    {
+        I18n::setLocale($locale);
     }
 }
 
@@ -169,7 +223,7 @@ if (!function_exists('get_post_types')) {
 
 if (!function_exists('get_post_meta')) {
     /**
-     * Retrieve a custom post metadata field from cms_post_meta.
+     * Retrieve a custom post metadata field from cms_post_meta with in-memory caching.
      *
      * @param int $postId
      * @param string $key
@@ -178,6 +232,11 @@ if (!function_exists('get_post_meta')) {
      */
     function get_post_meta(int $postId, string $key, mixed $default = null): mixed
     {
+        global $_cms_post_meta_cache;
+        if (isset($_cms_post_meta_cache[$postId]) && array_key_exists($key, $_cms_post_meta_cache[$postId])) {
+            return $_cms_post_meta_cache[$postId][$key];
+        }
+
         try {
             $db = Database::getInstance();
             $val = $db->fetchColumn(
@@ -186,11 +245,14 @@ if (!function_exists('get_post_meta')) {
             );
 
             if ($val === false || $val === null) {
+                $_cms_post_meta_cache[$postId][$key] = $default;
                 return $default;
             }
 
             $decoded = json_decode((string)$val, true);
-            return (json_last_error() === JSON_ERROR_NONE && (is_array($decoded) || is_object($decoded))) ? $decoded : $val;
+            $res = (json_last_error() === JSON_ERROR_NONE && (is_array($decoded) || is_object($decoded))) ? $decoded : $val;
+            $_cms_post_meta_cache[$postId][$key] = $res;
+            return $res;
         } catch (\Throwable $e) {
             return $default;
         }
@@ -208,10 +270,10 @@ if (!function_exists('update_post_meta')) {
      */
     function update_post_meta(int $postId, string $key, mixed $value): bool
     {
+        global $_cms_post_meta_cache;
         try {
             $db = Database::getInstance();
             $metaValue = is_array($value) || is_object($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value;
-            $now = date('Y-m-d H:i:s');
 
             $existingId = $db->fetchColumn(
                 "SELECT id FROM cms_post_meta WHERE post_id = :post_id AND meta_key = :meta_key LIMIT 1",
@@ -230,6 +292,7 @@ if (!function_exists('update_post_meta')) {
                 );
             }
 
+            $_cms_post_meta_cache[$postId][$key] = $value;
             return true;
         } catch (\Throwable $e) {
             return false;
@@ -247,15 +310,100 @@ if (!function_exists('delete_post_meta')) {
      */
     function delete_post_meta(int $postId, string $key): bool
     {
+        global $_cms_post_meta_cache;
         try {
             $db = Database::getInstance();
             $db->execute(
                 "DELETE FROM cms_post_meta WHERE post_id = :post_id AND meta_key = :meta_key",
                 ['post_id' => $postId, 'meta_key' => $key]
             );
+            unset($_cms_post_meta_cache[$postId][$key]);
             return true;
         } catch (\Throwable $e) {
             return false;
         }
+    }
+}
+
+if (!function_exists('picture_tag')) {
+    /**
+     * Render semantic HTML5 <picture> tag with WebP source and fallback img.
+     *
+     * @param int|array|string $media Media ID, media record array, or image path
+     * @param string $size 'thumbnail'|'medium'|'large'|'original'
+     * @param string $alt
+     * @param string $class
+     * @return string
+     */
+    function picture_tag(int|array|string $media, string $size = 'large', string $alt = '', string $class = ''): string
+    {
+        $imgSrc = '';
+        $webpSrc = '';
+
+        if (is_int($media)) {
+            try {
+                $db = Database::getInstance();
+                $row = $db->fetch("SELECT * FROM cms_media WHERE id = :id LIMIT 1", ['id' => $media]);
+                if ($row) {
+                    $media = $row;
+                }
+            } catch (\Throwable $e) {
+                // Ignore
+            }
+        }
+
+        if (is_array($media)) {
+            $meta = [];
+            if (!empty($media['meta_data'])) {
+                $meta = is_array($media['meta_data']) ? $media['meta_data'] : json_decode((string)$media['meta_data'], true);
+            }
+
+            $imgSrc = $media['file_path'] ?? '';
+            $alt = !empty($alt) ? $alt : ($media['filename'] ?? '');
+
+            // Check if size variant exists
+            if ($size !== 'original' && isset($meta['variants'][$size])) {
+                $v = $meta['variants'][$size];
+                $imgSrc = $v['path'] ?? $imgSrc;
+                if (!empty($v['webp_path'])) {
+                    $webpSrc = $v['webp_path'];
+                }
+            } elseif (isset($meta['variants']['original_webp']['path'])) {
+                $webpSrc = $meta['variants']['original_webp']['path'];
+            }
+        } elseif (is_string($media)) {
+            $imgSrc = $media;
+            $pathInfo = pathinfo($media);
+            $ext = strtolower($pathInfo['extension'] ?? '');
+            if ($ext !== 'webp') {
+                $webpSrc = ($pathInfo['dirname'] ?? '') . '/' . ($pathInfo['filename'] ?? '') . '.webp';
+            }
+        }
+
+        if (empty($imgSrc)) {
+            return '';
+        }
+
+        $imgUrl = base_url($imgSrc);
+        $escapedAlt = htmlspecialchars($alt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $escapedClass = !empty($class) ? ' class="' . htmlspecialchars($class, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"' : '';
+
+        if (!empty($webpSrc)) {
+            $webpUrl = base_url($webpSrc);
+            return sprintf(
+                '<picture><source srcset="%s" type="image/webp"><img src="%s" alt="%s"%s loading="lazy"></picture>',
+                htmlspecialchars($webpUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                htmlspecialchars($imgUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                $escapedAlt,
+                $escapedClass
+            );
+        }
+
+        return sprintf(
+            '<img src="%s" alt="%s"%s loading="lazy">',
+            htmlspecialchars($imgUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            $escapedAlt,
+            $escapedClass
+        );
     }
 }
