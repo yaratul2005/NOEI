@@ -25,13 +25,13 @@ class Database
      */
     private function __construct(array $config)
     {
-        $driver = $config['driver'] ?? 'mysql';
-        $host = $config['host'] ?? '127.0.0.1';
+        $driver = strtolower((string)($config['driver'] ?? 'mysql'));
+        $host = (string)($config['host'] ?? '127.0.0.1');
         $port = (int)($config['port'] ?? 3306);
-        $dbname = $config['dbname'] ?? '';
-        $username = $config['username'] ?? '';
-        $password = $config['password'] ?? '';
-        $charset = $config['charset'] ?? 'utf8mb4';
+        $dbname = (string)($config['dbname'] ?? ($config['database'] ?? ''));
+        $username = (string)($config['username'] ?? '');
+        $password = (string)($config['password'] ?? '');
+        $charset = (string)($config['charset'] ?? 'utf8mb4');
 
         if ($driver === 'sqlite') {
             $dsn = "sqlite:{$dbname}";
@@ -45,13 +45,15 @@ class Database
             PDO::ATTR_EMULATE_PREPARES => false,
         ];
 
-        if (defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
+        $isMysql = ($driver === 'mysql' || str_starts_with($dsn, 'mysql:'));
+
+        if ($isMysql && defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
             $options[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci";
         }
 
         try {
             $this->pdo = new PDO($dsn, $username, $password, $options);
-            if ($driver === 'mysql') {
+            if ($isMysql) {
                 $this->pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
             }
         } catch (PDOException $e) {
