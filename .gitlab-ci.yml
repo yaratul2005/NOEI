@@ -1,0 +1,54 @@
+# .gitlab-ci.yml
+image: php:8.2-cli
+
+services:
+  - name: mariadb:10.6
+    alias: mysql
+    variables:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: noei_test
+      MYSQL_USER: noei_user
+      MYSQL_PASSWORD: secret_password
+
+variables:
+  MYSQL_HOST: mysql
+  MYSQL_DATABASE: noei_test
+  MYSQL_USER: noei_user
+  MYSQL_PASSWORD: secret_password
+
+stages:
+  - lint
+  - test
+  - release
+
+# Stage 1: PHP Syntax Linting
+lint:php:
+  stage: lint
+  script:
+    - find . -name "*.php" -not -path "./storage/*" -exec php -l {} \;
+
+# Stage 2: Automated Test Execution
+test:unit:
+  stage: test
+  before_script:
+    - apt-get update && apt-get install -y libpng-dev libjpeg-dev libzip-dev default-mysql-client
+    - docker-php-ext-configure gd --with-jpeg
+    - docker-php-ext-install pdo pdo_mysql gd zip
+  script:
+    - php tests/test_core.php
+
+# Stage 3: Package Release ZIP on Tags
+package:release:
+  stage: release
+  only:
+    - tags
+  before_script:
+    - apt-get update && apt-get install -y libzip-dev zip
+    - docker-php-ext-install zip
+  script:
+    - php tools/build-release.php
+  artifacts:
+    name: "noei-cms-$CI_COMMIT_TAG"
+    paths:
+      - storage/backups/*.zip
+    expire_in: 30 days
